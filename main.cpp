@@ -10,8 +10,8 @@
 
 // k_EPersonaStateOffline = 0,			// friend is not currently logged on
 // k_EPersonaStateOnline = 1,			// friend is logged on
-// k_EPersonaStateBusy = 2,			// user is on, but busy
-// k_EPersonaStateAway = 3,			// auto-away feature
+// k_EPersonaStateBusy = 2,				// user is on, but busy
+// k_EPersonaStateAway = 3,				// auto-away feature
 // k_EPersonaStateSnooze = 4,			// auto-away for a long time
 // k_EPersonaStateLookingToTrade = 5,	// Online, trading
 // k_EPersonaStateLookingToPlay = 6,	// Online, wanting to play
@@ -20,9 +20,6 @@
 
 class PaydayPlayer {
   public:
-	PaydayPlayer(CSteamID ID, const std::string &name, EPersonaState state,
-				 const std::string &lobbyID,
-				 const std::vector<std::pair<std::string, std::string>> &rpcData);
 	PaydayPlayer();
 
 	CSteamID ID;
@@ -33,15 +30,8 @@ class PaydayPlayer {
 	std::vector<std::pair<std::string, std::string>> rpcData;
 };
 
-PaydayPlayer::PaydayPlayer(CSteamID ID, const std::string &name, EPersonaState state,
-						   const std::string &lobbyID,
-						   const std::vector<std::pair<std::string, std::string>> &rpcData)
-	: ID(ID), name(name), state(state), lobbyID(lobbyID), rpcData(rpcData) {
-	//
-}
-
 PaydayPlayer::PaydayPlayer() {
-	//
+	// empty constructor, we assign values later after fetching them from Steam
 }
 
 int main() {
@@ -64,7 +54,7 @@ int main() {
 		player.name = SteamFriends()->GetFriendPersonaName(player.ID);
 
 		// get the friend's online status
-		EPersonaState friendState = SteamFriends()->GetFriendPersonaState(player.ID);
+		player.state = SteamFriends()->GetFriendPersonaState(player.ID);
 		// if (friendState == EPersonaState::k_EPersonaStateOffline) {
 		//  continue;
 		//}
@@ -79,7 +69,7 @@ int main() {
 
 		// printf("Friend #%.3d: %lld - %s - %s\n", //
 		printf("Friend #%.3d: %lld [%d]: %s\n", //
-			   index + 1, player.ID.ConvertToUint64(), friendState, player.name.c_str());
+			   index + 1, player.ID.ConvertToUint64(), player.state, player.name.c_str());
 
 		// fetch the currently played game by the friend
 		FriendGameInfo_t friendGame{};
