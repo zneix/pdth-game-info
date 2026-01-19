@@ -1,4 +1,3 @@
-#include "steam_api_common.h"
 #pragma comment(lib, "libsteam_api.so")
 
 #include <cstdio>
@@ -19,6 +18,32 @@
 // k_EPersonaStateInvisible = 7,		// Online, but appears offline to friends.  This status is
 // never published to clients.
 
+class PaydayPlayer {
+  public:
+	PaydayPlayer(CSteamID ID, const std::string &name, EPersonaState state,
+				 const std::string &lobbyID,
+				 const std::vector<std::pair<std::string, std::string>> &rpcData);
+	PaydayPlayer();
+
+	CSteamID ID;
+	std::string name;
+	EPersonaState state;
+
+	std::string lobbyID;
+	std::vector<std::pair<std::string, std::string>> rpcData;
+};
+
+PaydayPlayer::PaydayPlayer(CSteamID ID, const std::string &name, EPersonaState state,
+						   const std::string &lobbyID,
+						   const std::vector<std::pair<std::string, std::string>> &rpcData)
+	: ID(ID), name(name), state(state), lobbyID(lobbyID), rpcData(rpcData) {
+	//
+}
+
+PaydayPlayer::PaydayPlayer() {
+	//
+}
+
 int main() {
 	if (!SteamAPI_Init()) {
 		return -2;
@@ -27,43 +52,47 @@ int main() {
 	int nFriends = SteamFriends()->GetFriendCount(EFriendFlags::k_EFriendFlagImmediate);
 	printf("\nAll Friends of %s: %d\n\n", SteamFriends()->GetPersonaName(), nFriends);
 
+	// std::map<std::string, PaydayPlayer> lobbies = {};
+	// return 0;
+
 	// prepare player data
 	for (int index = 0; index < nFriends; ++index) {
-		// fetch ID of the current friend
-		CSteamID friendSteamID = SteamFriends()->GetFriendByIndex(index, k_EFriendFlagImmediate);
-		// fetch name
-		const char *friendName = SteamFriends()->GetFriendPersonaName(friendSteamID);
+		// use objects for our newly parsed friend
+		PaydayPlayer player;
+
+		player.ID = SteamFriends()->GetFriendByIndex(index, k_EFriendFlagImmediate);
+		player.name = SteamFriends()->GetFriendPersonaName(player.ID);
 
 		// get the friend's online status
-		EPersonaState friendState = SteamFriends()->GetFriendPersonaState(friendSteamID);
+		EPersonaState friendState = SteamFriends()->GetFriendPersonaState(player.ID);
 		// if (friendState == EPersonaState::k_EPersonaStateOffline) {
 		//  continue;
 		//}
 
-		SteamFriends()->RequestFriendRichPresence(friendSteamID); // maybe will make some diff?
+		SteamFriends()->RequestFriendRichPresence(player.ID); // maybe will make some diff?
 		// SteamAPI_RunCallbacks();
 
-		int nGameInfo = SteamFriends()->GetFriendRichPresenceKeyCount(friendSteamID);
+		int nGameInfo = SteamFriends()->GetFriendRichPresenceKeyCount(player.ID);
 		if (nGameInfo <= 0) {
 			continue;
 		}
 
 		// printf("Friend #%.3d: %lld - %s - %s\n", //
 		printf("Friend #%.3d: %lld [%d]: %s\n", //
-			   index + 1, friendSteamID.ConvertToUint64(), friendState, friendName);
+			   index + 1, player.ID.ConvertToUint64(), friendState, player.name.c_str());
 
 		// fetch the currently played game by the friend
 		FriendGameInfo_t friendGame{};
-		SteamFriends()->GetFriendGamePlayed(friendSteamID, &friendGame);
+		SteamFriends()->GetFriendGamePlayed(player.ID, &friendGame);
 		const int friendGameID = friendGame.m_gameID.ToUint64();
 
-		const char *display = SteamFriends()->GetFriendRichPresence(friendSteamID, "steam_display");
+		const char *display = SteamFriends()->GetFriendRichPresence(player.ID, "steam_display");
 		printf("playing %d: \"%s\"\n", friendGameID, display);
 
 		// fetch 'view game info' status stuff
 		for (int j = 0; j < nGameInfo; ++j) {
-			const char *rpcKey = SteamFriends()->GetFriendRichPresenceKeyByIndex(friendSteamID, j);
-			const char *rpcValue = SteamFriends()->GetFriendRichPresence(friendSteamID, rpcKey);
+			const char *rpcKey = SteamFriends()->GetFriendRichPresenceKeyByIndex(player.ID, j);
+			const char *rpcValue = SteamFriends()->GetFriendRichPresence(player.ID, rpcKey);
 			printf("\"%s\": \"%s\"\n", rpcKey, rpcValue);
 		}
 
