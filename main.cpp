@@ -1,9 +1,9 @@
 #pragma comment(lib, "libsteam_api.so")
 
 #include <cstdio>
-#include <map>
+#include <cstring>
 #include <string>
-#include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "steam_api.h"
@@ -18,20 +18,52 @@
 // k_EPersonaStateInvisible = 7,		// Online, but appears offline to friends.  This status is
 // never published to clients.
 
+// number of maximum possible players in a payday game
+const int MAX_LOBBY_SIZE = 4;
+
 class PaydayPlayer {
   public:
 	PaydayPlayer();
+	void printRpcData();
 
 	CSteamID ID;
-	std::string name;
+	const char *name;
 	EPersonaState state;
 
 	std::string lobbyID;
-	std::vector<std::pair<std::string, std::string>> rpcData;
+	int lobbySize;
+	std::vector<std::pair<const char *, const char *>> rpcData;
 };
 
 PaydayPlayer::PaydayPlayer() {
-	// empty constructor, we assign values later after fetching them from Steam
+	this->lobbyID = "";
+	this->lobbySize = -1;
+	this->rpcData = {};
+}
+
+void PaydayPlayer::printRpcData() {
+	for (auto rpcPair : this->rpcData) {
+		printf("    \"%s\": \"%s\"\n", rpcPair.first, rpcPair.second);
+	}
+}
+
+class PaydayLobby {
+  public:
+	PaydayLobby();
+	void addKnownPlayer(PaydayPlayer player);
+
+	int playerCount;
+	std::vector<PaydayPlayer> knownPlayers;
+};
+
+PaydayLobby::PaydayLobby() {
+	this->playerCount = -1; // realistically it should be at least 1 (and at most 4) but we shall set this later anyway
+	this->knownPlayers = std::vector<PaydayPlayer>();
+}
+
+void PaydayLobby::addKnownPlayer(PaydayPlayer player) {
+	this->knownPlayers.push_back(player);
+	this->playerCount = player.lobbySize;
 }
 
 int main() {
@@ -40,10 +72,9 @@ int main() {
 	}
 
 	int nFriends = SteamFriends()->GetFriendCount(EFriendFlags::k_EFriendFlagImmediate);
-	printf("\nAll Friends of %s: %d\n\n", SteamFriends()->GetPersonaName(), nFriends);
+	printf("All Friends of %s: %d\n\n", SteamFriends()->GetPersonaName(), nFriends);
 
-	// std::map<std::string, PaydayPlayer> lobbies = {};
-	// return 0;
+	std::unordered_map<std::string, PaydayLobby> lobbies = {};
 
 	// prepare player data
 	for (int index = 0; index < nFriends; ++index) {
@@ -62,14 +93,13 @@ int main() {
 		SteamFriends()->RequestFriendRichPresence(player.ID); // maybe will make some diff?
 		// SteamAPI_RunCallbacks();
 
+		// don't process data from a player who doesn't have presence data available - this usually means they aren't playing payday at the moment
 		int nGameInfo = SteamFriends()->GetFriendRichPresenceKeyCount(player.ID);
 		if (nGameInfo <= 0) {
 			continue;
 		}
 
-		// printf("Friend #%.3d: %lld - %s - %s\n", //
-		printf("Friend #%.3d: %lld [%d]: %s\n", //
-			   index + 1, player.ID.ConvertToUint64(), player.state, player.name.c_str());
+		// TODO: consider using universal friend index (I made this name up) a.k.a. 'index + 1' in PaydayPlayer object
 
 		// fetch the currently played game by the friend
 		FriendGameInfo_t friendGame{};
@@ -77,15 +107,48 @@ int main() {
 		const int friendGameID = friendGame.m_gameID.ToUint64();
 
 		const char *display = SteamFriends()->GetFriendRichPresence(player.ID, "steam_display");
-		printf("playing %d: \"%s\"\n", friendGameID, display);
 
-		// fetch 'view game info' status stuff
+		// fetch 'view game info' status information
 		for (int j = 0; j < nGameInfo; ++j) {
 			const char *rpcKey = SteamFriends()->GetFriendRichPresenceKeyByIndex(player.ID, j);
 			const char *rpcValue = SteamFriends()->GetFriendRichPresence(player.ID, rpcKey);
-			printf("\"%s\": \"%s\"\n", rpcKey, rpcValue);
+
+			if (std::strcmp(rpcKey, "steam_player_group") == 0) {
+				// set player's lobby ID
+				player.lobbyID = rpcValue;
+			} else if (std::strcmp(rpcKey, "steam_player_group_size") == 0) {
+				// set player's lobby size
+				player.lobbySize = std::stoi(rpcValue);
+			} else {
+				player.rpcData.emplace_back(std::pair{rpcKey, rpcValue});
+			}
 		}
 
+		// when player somehow isn't in a lobby, do not initialize lobby data and instead print what we salvaged
+		if (player.lobbyID.empty()) {
+			printf("[not-in-lobby] %s | encountered %lu rpc pairs:\n", player.name, player.rpcData.size());
+			player.printRpcData();
+
+			printf("\n");
+			continue;
+		}
+
+		// lobby hasn't been encountered yet, initialize it in the list of found lobbies
+		if (!lobbies.contains(player.lobbyID)) {
+			lobbies.insert({player.lobbyID, {}});
+		}
+		// get the lobby and add the player to it
+		lobbies[player.lobbyID].addKnownPlayer(player);
+	}
+
+	// print lobby data
+	for (auto lobby : lobbies) {
+		printf("lobby %s\nplayers %d / %d\n", lobby.first.c_str(), lobby.second.playerCount, MAX_LOBBY_SIZE);
+		// go through each player in the lobby
+		for (auto lobbyPlayer : lobby.second.knownPlayers) {
+			printf("  [%d] %lld %s\n", lobbyPlayer.state, lobbyPlayer.ID.ConvertToUint64(), lobbyPlayer.name);
+			lobbyPlayer.printRpcData();
+		}
 		printf("\n");
 	}
 
