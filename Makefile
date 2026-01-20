@@ -9,6 +9,8 @@ SDK_PATH := ./sdk
 SOURCES := \
 	main.cpp \
 
+FLAGS := -std=c++20
+
 # name of resulting executable
 TARGET := pdth-game-info
 PLATFORM ?= linux64
@@ -54,7 +56,7 @@ sdk: download-sdk
 
 build: prepare-dirs sdk
 	mkdir -p build/bin
-	g++ $(SOURCES) -o build/bin/$(TARGET) -I"$(SDK_PATH)" -L"$(LIB_PATH)" -Wl,-rpath,"$(LIB_PATH)" -l:libsteam_api.so
+	g++ $(FLAGS) $(SOURCES) -o build/bin/$(TARGET) -I"$(SDK_PATH)" -L"$(LIB_PATH)" -Wl,-rpath,"$(LIB_PATH)" -l:libsteam_api.so
 
 # TODO: remove this! (or not? maybe it's needed after all)
 appid:
